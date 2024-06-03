@@ -41,9 +41,9 @@ app.post("/api/users", (req, res) => {
 
   //check if username already exists
   User.findOne({ username: username })
-    .then((username) => {
+    .then((user) => {
       res.send(
-        `User ${username.username} already exists. Please choose another username.`
+        `User ${user.username} already exists. Please choose another username.`
       );
     })
     .catch((err) => {
@@ -52,6 +52,28 @@ app.post("/api/users", (req, res) => {
         res.json({ username: user.username, _id: user._id });
       });
     });
+});
+
+//Get all users
+app.get("/api/users", (req, res) => {
+  User.find().then((users) => {
+    res.json(users);
+  });
+});
+
+//Create new exercise
+app.post("/api/users/:_id/exercises", (req, res) => {
+  const _id = req.params._id;
+  const description = req.body.description;
+  const duration = req.body.duration;
+  const date = req.body.date;
+
+  const newExercise = new Exercise({
+    _id: _id,
+    description: description,
+    duration: duration,
+    date: date,
+  });
 });
 
 const listener = app.listen(process.env.PORT || 3000, () => {
