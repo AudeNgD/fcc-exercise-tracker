@@ -4,6 +4,7 @@ const cors = require("cors");
 require("dotenv").config();
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
+const { count } = require("firebase/firestore");
 
 app.use(cors());
 app.use(express.static("public"));
@@ -28,7 +29,7 @@ const exerciseSchema = new Schema({
   userId: { type: String, required: true },
   description: { type: String, required: true },
   duration: { type: Number, required: true },
-  date: { type: Date },
+  date: { type: Date, default: Date.now },
 });
 
 //Create models
@@ -63,16 +64,75 @@ app.get("/api/users", (req, res) => {
 
 //Create new exercise
 app.post("/api/users/:_id/exercises", (req, res) => {
-  const _id = req.params._id;
+  const userId = req.body[":_id"];
   const description = req.body.description;
   const duration = req.body.duration;
-  const date = req.body.date;
+  let date = req.body.date;
+
+  if (!date) {
+    date = new Date();
+  }
 
   const newExercise = new Exercise({
-    _id: _id,
+    userId: userId,
     description: description,
     duration: duration,
     date: date,
+  });
+
+  //check if user exists
+  //const userId = mongoose.Types.ObjectId.createFromHexString(id);
+  User.findById(userId)
+    .then((user) => {
+      newExercise.username = user.username;
+      newExercise
+        .save()
+        .then((exercise) => {
+          //_id is a unique identifier withing MongoDB so can't directly take the user id value
+          res.json({
+            _id: exercise.userId,
+            username: exercise.username,
+            description: exercise.description,
+            duration: exercise.duration,
+            date: exercise.date.toDateString(),
+          });
+        })
+        .catch((err) => {
+          console.log(err);
+          res.send("User not found");
+        });
+    })
+    .catch((err) => {
+      res.send("User not found");
+    });
+});
+
+//Get the log of exercises of a user
+app.get("/api/users/:_id/logs", (req, res) => {
+  const userId = req.params._id;
+  const from = req.query.from;
+  const to = req.query.to;
+  const limit = req.query.limit;
+
+  User.findById(userId).then((user) => {
+    Exercise.find({ userId: user._id, date: { $gte: from, $lte: to } })
+      .limit(limit)
+      .then((exercises) => {
+        exercises.forEach((exercise) => {
+          exercise.date.toDateString();
+          console.log(exercise.date);
+        });
+        exercises = exercises.filter((exercise) => {
+          res.json({
+            username: user.username,
+            count: exercises.length,
+            log: exercises,
+          });
+        });
+      })
+      .catch((err) => {
+        res.send("User not found");
+      });
   });
 });
 
