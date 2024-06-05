@@ -116,23 +116,33 @@ app.get("/api/users/:_id/logs", (req, res) => {
 
   User.findById(userId)
     .then((user) => {
-      //console.log(user);
-      Exercise.find({ userId: userId, date: { $gte: from, $lte: to } })
+      //console.log(user)
+      //Exercise.find({ userId: userId, date: { $gte: from, $lte: to } })
+      Exercise.find({ userId: userId })
         .then((exercises) => {
           let log = [];
           let count = 0;
           if (exercises.length === 0) {
             log = [];
           } else {
+            console.log(exercises);
+            console.log(exercises.length);
             count = exercises.length;
             log = exercises.map((exercise) => {
+              console.log(exercise.date);
+              let logDate;
+              exercise.date
+                ? (logDate = exercise.date.toDateString())
+                : (logDate = new Date().toDateString());
               return {
                 description: exercise.description,
                 duration: exercise.duration,
-                date: exercise.date.toDateString(),
+                date: logDate,
               };
             });
-            log = log.slice(0, limit + 1);
+            if (limit > 0 && log.length > limit) {
+              log = log.slice(0, limit);
+            }
           }
 
           return res.json({
