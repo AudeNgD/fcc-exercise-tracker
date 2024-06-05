@@ -4,7 +4,7 @@ const cors = require("cors");
 require("dotenv").config();
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
-const { count } = require("firebase/firestore");
+const moment = require("moment");
 
 app.use(cors());
 app.use(express.static("public"));
@@ -29,7 +29,7 @@ const exerciseSchema = new Schema({
   userId: { type: String, required: true },
   description: { type: String, required: true },
   duration: { type: Number, required: true },
-  date: { type: Date, default: Date.now },
+  date: { type: Date },
 });
 
 //Create models
@@ -50,7 +50,7 @@ app.post("/api/users", (req, res) => {
     .catch((err) => {
       const newUser = new User({ username: username });
       newUser.save().then((user) => {
-        res.json({ username: user.username, _id: user._id });
+        return res.json({ username: user.username, _id: user._id });
       });
     });
 });
@@ -58,48 +58,43 @@ app.post("/api/users", (req, res) => {
 //Get all users
 app.get("/api/users", (req, res) => {
   User.find().then((users) => {
-    res.json(users);
+    return res.json(users);
   });
 });
 
 //Create new exercise
 app.post("/api/users/:_id/exercises", (req, res) => {
-  const userId = req.body[":_id"];
+  const userId = req.params._id;
   const description = req.body.description;
   const duration = req.body.duration;
-  let date = req.body.date;
-
-  if (!date) {
-    date = new Date();
-  }
-
-  const newExercise = new Exercise({
-    userId: userId,
-    description: description,
-    duration: duration,
-    date: date,
-  });
+  let date;
+  req.body.date ? (date = new Date(req.body.date)) : new Date();
 
   //check if user exists
   //const userId = mongoose.Types.ObjectId.createFromHexString(id);
   User.findById(userId)
     .then((user) => {
-      newExercise.username = user.username;
+      const newExercise = new Exercise({
+        userId: userId,
+        description: description,
+        duration: duration,
+        date: date,
+      });
+
       newExercise
         .save()
         .then((exercise) => {
           //_id is a unique identifier withing MongoDB so can't directly take the user id value
-          res.json({
-            _id: exercise.userId,
-            username: exercise.username,
+          return res.json({
+            username: user.username,
             description: exercise.description,
             duration: exercise.duration,
             date: exercise.date.toDateString(),
+            _id: user._id,
           });
         })
         .catch((err) => {
-          console.log(err);
-          res.send("User not found");
+          res.send("Unable to save exercise. Please try again.");
         });
     })
     .catch((err) => {
@@ -110,30 +105,52 @@ app.post("/api/users/:_id/exercises", (req, res) => {
 //Get the log of exercises of a user
 app.get("/api/users/:_id/logs", (req, res) => {
   const userId = req.params._id;
-  const from = req.query.from;
-  const to = req.query.to;
-  const limit = req.query.limit;
+  let from;
+  let to;
+  let limit;
+  req.query.from
+    ? (from = new Date(req.query.from))
+    : (from = new Date("1900-01-01"));
+  req.query.to ? (to = new Date(req.query.to)) : (to = new Date());
+  req.query.limit ? (limit = parseInt(req.query.limit)) : (limit = 0);
 
-  User.findById(userId).then((user) => {
-    Exercise.find({ userId: user._id, date: { $gte: from, $lte: to } })
-      .limit(limit)
-      .then((exercises) => {
-        exercises.forEach((exercise) => {
-          exercise.date.toDateString();
-          console.log(exercise.date);
-        });
-        exercises = exercises.filter((exercise) => {
-          res.json({
+  User.findById(userId)
+    .then((user) => {
+      //console.log(user);
+      Exercise.find({ userId: userId, date: { $gte: from, $lte: to } })
+        .then((exercises) => {
+          let log = [];
+          let count = 0;
+          if (exercises.length === 0) {
+            log = [];
+          } else {
+            count = exercises.length;
+            log = exercises.map((exercise) => {
+              return {
+                description: exercise.description,
+                duration: exercise.duration,
+                date: exercise.date.toDateString(),
+              };
+            });
+            log = log.slice(0, limit + 1);
+          }
+
+          return res.json({
             username: user.username,
-            count: exercises.length,
-            log: exercises,
+            count: count,
+            _id: userId,
+            log: log,
           });
+        })
+        .catch((err) => {
+          console.log(err);
+          res.send("No exercises found for this user");
         });
-      })
-      .catch((err) => {
-        res.send("User not found");
-      });
-  });
+    })
+    .catch((err) => {
+      console.log(err);
+      res.send("User not found");
+    });
 });
 
 const listener = app.listen(process.env.PORT || 3000, () => {
